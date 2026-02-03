@@ -20,14 +20,16 @@ function identityMatrix() {
  * @param {number} far Far clipping plane
  */
 function perspectiveMatrix(fov, aspect, near, far) {
-    const f = 1.0 / Math.tan(fov / 2);
-    const nf = 1 / (near - far);
+    var fy = 1.0 / Math.tan(fov / 2);
+    var fx = fy / aspect;
+    var A = -2*near*far/(far - near);
+    var B = -(far + near)/(far - near); 
 
     return new Float32Array([
-        f / aspect, 0, 0, 0,
-        0, f, 0, 0,
-        0, 0, (far + near) * nf, -1,
-        0, 0, (2 * far * near) * nf, 0
+        fx, 0, 0, 0,
+        0, fy, 0, 0,
+        0, 0, A, B,
+        0, 0, -1, 0
     ]);
 }
 
