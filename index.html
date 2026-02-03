@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>WebGL 3D Project</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body onload="init()">
+
+    <canvas id="glcanvas" width="800" height="480"></canvas>
+
+    <!-- Vertex Shader -->
+    <script id="vertex-shader" type="x-shader/x-vertex">
+        attribute vec4 aPosition;
+
+        uniform mat4 uModelViewMatrix;
+        uniform mat4 uProjectionMatrix;
+
+        void main() {
+            gl_Position = uProjectionMatrix * uModelViewMatrix * aPosition;
+        }
+    </script>
+
+    <!-- Fragment Shader -->
+    <script id="fragment-shader" type="x-shader/x-fragment">
+        precision mediump float;
+
+        void main() {
+            gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0); // vermelho
+        }
+    </script>
+
+    <script src="./main.js"></script>
+    <script src="./math/Matrix.js"></script>
+</body>
+</html>
