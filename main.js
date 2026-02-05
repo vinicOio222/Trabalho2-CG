@@ -1,6 +1,18 @@
 let angle = 0;
 const stride = 5 * Float32Array.BYTES_PER_ELEMENT;
 
+// Camera state
+let cameraPos = [0, 0, 5];      // posição inicial
+let cameraFront = [0, 0, -1];   // direção que olha (para -Z)
+let cameraUp = [0, 1, 0];       // vetor "para cima"
+let yaw = -90;                  // rotação horizontal (graus)
+let pitch = 0;                  // rotação vertical (graus)
+const cameraSpeed = 0.1;
+const mouseSensitivity = 0.1;
+
+// Keyboard state
+const keys = {};
+
 /**
  * Returns the WebGL rendering context from a canvas.
  * @param {HTMLCanvasElement} canvas - The canvas element.
@@ -38,20 +50,75 @@ function createShader(gl, type, source) {
     return shader;
 }
 
+function processInput() {
+    // Frente/Trás (W/S ou Setas)
+    if (keys['KeyW'] || keys['ArrowUp']) {
+        cameraPos[0] += cameraFront[0] * cameraSpeed;
+        cameraPos[1] += cameraFront[1] * cameraSpeed;
+        cameraPos[2] += cameraFront[2] * cameraSpeed;
+    }
+    if (keys['KeyS'] || keys['ArrowDown']) {
+        cameraPos[0] -= cameraFront[0] * cameraSpeed;
+        cameraPos[1] -= cameraFront[1] * cameraSpeed;
+        cameraPos[2] -= cameraFront[2] * cameraSpeed;
+    }
+    
+    // Esquerda/Direita (A/D ou Setas) - movimento lateral (strafe)
+    if (keys['KeyA'] || keys['ArrowLeft']) {
+        // Calcula vetor right = cross(front, up)
+        const right = normalizeVec3(crossVec3(cameraFront, cameraUp));
+        cameraPos[0] -= right[0] * cameraSpeed;
+        cameraPos[1] -= right[1] * cameraSpeed;
+        cameraPos[2] -= right[2] * cameraSpeed;
+    }
+    if (keys['KeyD'] || keys['ArrowRight']) {
+        const right = normalizeVec3(crossVec3(cameraFront, cameraUp));
+        cameraPos[0] += right[0] * cameraSpeed;
+        cameraPos[1] += right[1] * cameraSpeed;
+        cameraPos[2] += right[2] * cameraSpeed;
+    }
+}
+
+function updateCameraFront() {
+    const yawRad = yaw * Math.PI / 180;
+    const pitchRad = pitch * Math.PI / 180;
+    
+    cameraFront[0] = Math.cos(pitchRad) * Math.cos(yawRad);
+    cameraFront[1] = Math.sin(pitchRad);
+    cameraFront[2] = Math.cos(pitchRad) * Math.sin(yawRad);
+    
+    cameraFront = normalizeVec3(cameraFront);
+}
+
+
+
 function animate(gl, uModelView, indexes) {
+    processInput();
+
     angle += 0.01;
 
+    // MODEL: transformação do objeto
     const rotationYMat = rotateY(angle);
     const rotationXMat = rotateX(angle * 0.5);
-    const translationMat = translateZ(-6);
+    const modelTranslate = translate(0, 0, 0); // posição do objeto no mundo
+    
+    const model = multiplyMatrices(
+        modelTranslate,
+        multiplyMatrices(rotationYMat, rotationXMat)
+    );
 
-    const model =
-        multiplyMatrices(
-            translationMat,
-            multiplyMatrices(rotationYMat, rotationXMat)
-        );
+    // VIEW: câmera
+    const target = [
+        cameraPos[0] + cameraFront[0],
+        cameraPos[1] + cameraFront[1],
+        cameraPos[2] + cameraFront[2]
+    ];
+    const view = lookAt(cameraPos, target, cameraUp);
 
-    gl.uniformMatrix4fv(uModelView, false, model);
+    // Combina: View * Model
+    const modelView = multiplyMatrices(view, model);
+
+    gl.uniformMatrix4fv(uModelView, false, modelView);
 
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.drawElements(gl.TRIANGLES, indexes.length, gl.UNSIGNED_SHORT, 0);
@@ -184,5 +251,32 @@ function init() {
     gl.enable(gl.DEPTH_TEST);
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
 
+    // Keyboard controls
+    document.addEventListener('keydown', (e) => {
+        keys[e.code] = true;
+    });
+
+    document.addEventListener('keyup', (e) => {
+        keys[e.code] = false;
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        yaw += e.movementX * mouseSensitivity;
+        pitch -= e.movementY * mouseSensitivity;
+        
+        // Limita pitch para não ultrapassar 90 graus
+        if (pitch > 89) pitch = 89;
+        if (pitch < -89) pitch = -89;
+        
+        updateCameraFront();
+    });
+
+    // Clique no canvas para ativar pointer lock
+    canvas.addEventListener('click', () => {
+        canvas.requestPointerLock();
+    });
+
     animate(gl, uModelView, indexes);
+
+    updateCameraFront();
 }
