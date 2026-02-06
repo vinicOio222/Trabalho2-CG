@@ -1,49 +1,53 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
-
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
     <title>WebGL 3D Project</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="./style.css">
-</head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
 
-<body onload="init()">
-
+  <body onload="init()">
     <canvas id="glcanvas" width="800" height="480"></canvas>
 
     <!-- Vertex Shader -->
     <script id="vertex-shader" type="x-shader/x-vertex">
-        attribute vec3 aPosition;
-        attribute vec2 aTexCoord;
+      attribute vec3 aPosition;
+      attribute vec2 aTexCoord;
 
-        uniform mat4 uModelViewMatrix;
-        uniform mat4 uProjectionMatrix;
+      uniform mat4 uModelViewMatrix;
+      uniform mat4 uProjectionMatrix;
 
-        varying vec2 vTexCoord;
+      varying vec2 vTexCoord;
 
-        void main() {
-            vTexCoord = aTexCoord;
-            gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aPosition, 1.0);
-        }
+      void main() {
+          vTexCoord = aTexCoord;
+          gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aPosition, 1.0);
+      }
     </script>
 
     <!-- Fragment Shader -->
     <script id="fragment-shader" type="x-shader/x-fragment">
-        precision mediump float;
+      precision mediump float;
 
-        varying vec2 vTexCoord;
-        uniform sampler2D uSampler;
+      varying vec2 vTexCoord;
+      uniform sampler2D uSampler;
+      uniform bool uUseSolidColor;
+      uniform vec4 uSolidColor;
 
-        void main() {
-            gl_FragColor = texture2D(uSampler, vTexCoord);
-        }
+      void main() {
+          if (uUseSolidColor) {
+              gl_FragColor = uSolidColor;
+          } else {
+              gl_FragColor = texture2D(uSampler, vTexCoord);
+          }
+      }
     </script>
 
     <script src="./math/Matrix.js"></script>
+    <script src="./geometry/Geometry.js"></script>
+    <script src="./geometry/MinecraftCharacter.js"></script>
     <script src="./texture/Texture.js"></script>
     <script src="./main.js"></script>
-
-</body>
-
+  </body>
 </html>
