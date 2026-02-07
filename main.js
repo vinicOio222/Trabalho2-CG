@@ -2,11 +2,11 @@ let angle = 0;
 const stride = 5 * Float32Array.BYTES_PER_ELEMENT;
 
 // Camera state
-let cameraPos = [0, 2, 8]; // posição inicial (mais alta e mais longe)
-let cameraFront = [0, 0, -1]; // direção que olha (para -Z)
-let cameraUp = [0, 1, 0]; // vetor "para cima"
-let yaw = -90; // rotação horizontal (graus)
-let pitch = 0; // rotação vertical (graus)
+let cameraPos = [0, 2, 8]; // initial position (higher and farther)
+let cameraFront = [0, 0, -1]; // view direction (looking towards -Z)
+let cameraUp = [0, 1, 0]; // up vector
+let yaw = -90; // horizontal rotation (degrees)
+let pitch = 0; // vertical rotation (degrees)
 const cameraSpeed = 0.1;
 const mouseSensitivity = 0.1;
 
@@ -33,12 +33,11 @@ function getGL(canvas) {
 
 /**
  * Creates and compiles a shader.
- * @param gl - WebGL rendering context
- * @param type - Shader type (gl.VERTEX_SHADER or gl.FRAGMENT_SHADER)
- * @param source - Shader source code
+ * @param {WebGLRenderingContext} gl - WebGL rendering context
+ * @param {number} type - Shader type (gl.VERTEX_SHADER or gl.FRAGMENT_SHADER)
+ * @param {string} source - Shader source code
  * @returns {WebGLShader} Compiled shader
  */
-
 function createShader(gl, type, source) {
   const shader = gl.createShader(type);
   gl.shaderSource(shader, source);
@@ -53,7 +52,7 @@ function createShader(gl, type, source) {
 }
 
 function processInput() {
-  // Frente/Trás (W/S ou Setas)
+  // Forward / Backward (W/S or Arrow keys)
   if (keys["KeyW"] || keys["ArrowUp"]) {
     cameraPos[0] += cameraFront[0] * cameraSpeed;
     cameraPos[1] += cameraFront[1] * cameraSpeed;
@@ -65,9 +64,9 @@ function processInput() {
     cameraPos[2] -= cameraFront[2] * cameraSpeed;
   }
 
-  // Esquerda/Direita (A/D ou Setas) - movimento lateral (strafe)
+  // Left / Right (A/D or Arrow keys) – strafing
   if (keys["KeyA"] || keys["ArrowLeft"]) {
-    // Calcula vetor right = cross(front, up)
+    // Compute right vector = cross(front, up)
     const right = normalizeVec3(crossVec3(cameraFront, cameraUp));
     cameraPos[0] -= right[0] * cameraSpeed;
     cameraPos[1] -= right[1] * cameraSpeed;
@@ -93,10 +92,10 @@ function updateCameraFront() {
 }
 
 /**
- * Cria um objeto da cena
+ * Creates a scene object
  * @param {WebGLRenderingContext} gl
  * @param {Object} geometry - {vertices, indexes}
- * @param {Object} options - {position, scale, color, texture, name}
+ * @param {Object} options - {position, scale, rotation, color, texture, name}
  */
 function createSceneObject(gl, geometry, options = {}) {
   const vertexBuffer = gl.createBuffer();
@@ -132,7 +131,7 @@ function animate(gl, prog) {
   const uUseSolidColor = gl.getUniformLocation(prog, "uUseSolidColor");
   const uSolidColor = gl.getUniformLocation(prog, "uSolidColor");
 
-  // VIEW: câmera
+  // VIEW: camera
   const target = [
     cameraPos[0] + cameraFront[0],
     cameraPos[1] + cameraFront[1],
@@ -140,22 +139,12 @@ function animate(gl, prog) {
   ];
   const view = lookAt(cameraPos, target, cameraUp);
 
-  // Renderizar cada objeto da cena
+  // Render each scene object
   for (let obj of sceneObjects) {
-    // MODEL: transformação do objeto
+    // MODEL: object transformation
     let model = identityMatrix();
 
-    // Aplicar rotação apenas se o objeto for o Mario (cubo com textura)
-    // Desativado para manter o personagem estático
-    /*
-    if (obj.name === "mario") {
-      const rotationYMat = rotateY(angle);
-      const rotationXMat = rotateX(angle * 0.5);
-      model = multiplyMatrices(rotationYMat, rotationXMat);
-    }
-    */
-
-    // Aplicar rotação do objeto (para paredes, etc)
+    // Apply object rotation (walls, etc.)
     if (
       obj.rotation &&
       (obj.rotation[0] !== 0 || obj.rotation[1] !== 0 || obj.rotation[2] !== 0)
@@ -174,13 +163,13 @@ function animate(gl, prog) {
       }
     }
 
-    // Aplicar escala
+    // Apply scale
     if (obj.scale) {
       const scaleMat = scale(obj.scale[0], obj.scale[1], obj.scale[2]);
       model = multiplyMatrices(model, scaleMat);
     }
 
-    // Aplicar posição
+    // Apply translation
     const modelTranslate = translate(
       obj.position[0],
       obj.position[1],
@@ -188,11 +177,11 @@ function animate(gl, prog) {
     );
     model = multiplyMatrices(modelTranslate, model);
 
-    // Combina: View * Model
+    // Combine: View * Model
     const modelView = multiplyMatrices(view, model);
     gl.uniformMatrix4fv(uModelView, false, modelView);
 
-    // Configurar cor sólida ou textura
+    // Configure solid color or texture
     if (obj.color) {
       gl.uniform1i(uUseSolidColor, 1);
       gl.uniform4fv(uSolidColor, obj.color);
@@ -207,7 +196,7 @@ function animate(gl, prog) {
     gl.bindBuffer(gl.ARRAY_BUFFER, obj.vertexBuffer);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, obj.indexBuffer);
 
-    // Link vertex data to shader attribute
+    // Position attribute
     const aPosition = gl.getAttribLocation(prog, "aPosition");
     gl.enableVertexAttribArray(aPosition);
     gl.vertexAttribPointer(aPosition, 3, gl.FLOAT, false, stride, 0);
@@ -224,7 +213,7 @@ function animate(gl, prog) {
       3 * Float32Array.BYTES_PER_ELEMENT,
     );
 
-    // Draw
+    // Draw call
     gl.drawElements(gl.TRIANGLES, obj.indexCount, gl.UNSIGNED_SHORT, 0);
   }
 
@@ -260,7 +249,7 @@ function init() {
 
   gl.useProgram(prog);
 
-  // Carregar texturas
+  // Load textures
   const marioSkinTexture = loadTexture(
     gl,
     "./texture/assets/3572bed739382c28.png",
@@ -275,15 +264,15 @@ function init() {
     "./texture/assets/SM64_Asset_Texture_Castle_Wall_(Main_Hall).png",
   );
 
-  // Configurar textura
+  // Texture setup
   const uTexture = gl.getUniformLocation(prog, "uSampler");
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(gl.TEXTURE_2D, marioSkinTexture);
   gl.uniform1i(uTexture, 0);
 
-  // ===== Criar Objetos da Cena =====
+  // ===== Create Scene Objects =====
 
-  // 1. Chão com textura de areia (plano grande)
+  // 1. Floor with sand texture
   const planeGeom = createPlane(30, 30);
   const floor = createSceneObject(gl, planeGeom, {
     position: [0, 0, 0],
@@ -292,16 +281,16 @@ function init() {
   });
   sceneObjects.push(floor);
 
-  // 2. Cano metálico verde (cilindro)
+  // 2. Green metallic pipe (cylinder)
   const pipeGeom = createCylinder(0.8, 2.5, 20);
   const pipe = createSceneObject(gl, pipeGeom, {
     position: [-3, 0, -2],
-    color: [0.15, 0.55, 0.15, 1.0], // Verde metálico escuro
+    color: [0.15, 0.55, 0.15, 1.0],
     name: "pipe",
   });
   sceneObjects.push(pipe);
 
-  // 3. Colinas com textura de grama (semi-esferas)
+  // 3. Hills with grass texture (hemispheres)
   const hillGeom = createHill(2, 16);
 
   const hill1 = createSceneObject(gl, hillGeom, {
@@ -327,10 +316,10 @@ function init() {
   });
   sceneObjects.push(hill3);
 
-  // 4. Paredes com textura do castelo
+  // 4. Castle walls
   const wallGeom = createWall(30, 8);
 
-  // Parede norte (fundo)
+  // North wall (back)
   const wallNorth = createSceneObject(gl, wallGeom, {
     position: [0, 0, -15],
     texture: castleWallTexture,
@@ -338,44 +327,44 @@ function init() {
   });
   sceneObjects.push(wallNorth);
 
-  // Parede sul (frente)
+  // South wall (front)
   const wallSouth = createSceneObject(gl, wallGeom, {
     position: [0, 0, 15],
-    scale: [1, 1, -1], // Inverte para ficar virada para dentro
+    scale: [1, 1, -1],
     texture: castleWallTexture,
     name: "wallSouth",
   });
   sceneObjects.push(wallSouth);
 
-  // Parede leste (direita)
+  // East wall (right)
   const wallEast = createSceneObject(gl, wallGeom, {
     position: [15, 0, 0],
-    rotation: [0, Math.PI / 2, 0], // Rotação de 90 graus no eixo Y
+    rotation: [0, Math.PI / 2, 0],
     texture: castleWallTexture,
     name: "wallEast",
   });
   sceneObjects.push(wallEast);
 
-  // Parede oeste (esquerda)
+  // West wall (left)
   const wallWest = createSceneObject(gl, wallGeom, {
     position: [-15, 0, 0],
-    rotation: [0, -Math.PI / 2, 0], // Rotação de -90 graus no eixo Y
+    rotation: [0, -Math.PI / 2, 0],
     texture: castleWallTexture,
     name: "wallWest",
   });
   sceneObjects.push(wallWest);
 
-  // 5. Personagem Mario estilo Minecraft (acima do cano)
+  // 5. Minecraft-style Mario character (on top of the pipe)
   const marioGeom = createMinecraftCharacter();
   const mario = createSceneObject(gl, marioGeom, {
-    position: [-3, 2.5, -2], // Acima do cano
+    position: [-3, 2.5, -2],
     scale: [1, 1, 1],
     texture: marioSkinTexture,
     name: "mario",
   });
   sceneObjects.push(mario);
 
-  // ===== Configurar Projeção =====
+  // ===== Projection Setup =====
   const uProjection = gl.getUniformLocation(prog, "uProjectionMatrix");
   const projection = perspectiveMatrix(
     Math.PI / 4,
@@ -385,11 +374,11 @@ function init() {
   );
   gl.uniformMatrix4fv(uProjection, false, projection);
 
-  // ===== Configurações WebGL =====
+  // ===== WebGL Settings =====
   gl.enable(gl.DEPTH_TEST);
-  gl.clearColor(0.5, 0.7, 1.0, 1.0); // Céu azul claro
+  gl.clearColor(0.5, 0.7, 1.0, 1.0); // light blue sky
 
-  // ===== Controles =====
+  // ===== Controls =====
   document.addEventListener("keydown", (e) => {
     keys[e.code] = true;
   });
@@ -402,14 +391,14 @@ function init() {
     yaw += e.movementX * mouseSensitivity;
     pitch -= e.movementY * mouseSensitivity;
 
-    // Limita pitch para não ultrapassar 90 graus
+    // Clamp pitch to avoid flipping
     if (pitch > 89) pitch = 89;
     if (pitch < -89) pitch = -89;
 
     updateCameraFront();
   });
 
-  // Clique no canvas para ativar pointer lock
+  // Click canvas to enable pointer lock
   canvas.addEventListener("click", () => {
     canvas.requestPointerLock();
   });

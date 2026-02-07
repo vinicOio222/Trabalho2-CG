@@ -1,14 +1,14 @@
 /**
- * Cria um personagem estilo Minecraft
- * Layout da skin 64x64: https://minecraft.wiki/w/Player.json
- * @returns {Object} Objeto com vertices e indexes
+ * Creates a Minecraft-style character
+ * 64x64 skin layout: https://minecraft.wiki/w/Player.json
+ * @returns {Object} Object containing vertices and indices
  */
 function createMinecraftCharacter() {
   const vertices = [];
   const indexes = [];
   let vertexOffset = 0;
 
-  // Helper para adicionar um cubo com coordenadas de textura específicas
+  // Helper to add a cube with specific texture coordinates
   function addCube(x, y, z, w, h, d, texCoords) {
     const x1 = x - w / 2,
       x2 = x + w / 2;
@@ -17,7 +17,7 @@ function createMinecraftCharacter() {
     const z1 = z - d / 2,
       z2 = z + d / 2;
 
-    // Cada face tem suas coordenadas de textura: [u1, v1, u2, v2]
+    // Each face has its own texture coordinates: [u1, v1, u2, v2]
     const faces = [
       // Front
       [x1, y1, z2, x2, y1, z2, x2, y2, z2, x1, y2, z2, texCoords.front],
@@ -38,26 +38,10 @@ function createMinecraftCharacter() {
         face;
 
       vertices.push(
-        p1x,
-        p1y,
-        p1z,
-        uv[0],
-        uv[3],
-        p2x,
-        p2y,
-        p2z,
-        uv[2],
-        uv[3],
-        p3x,
-        p3y,
-        p3z,
-        uv[2],
-        uv[1],
-        p4x,
-        p4y,
-        p4z,
-        uv[0],
-        uv[1],
+        p1x, p1y, p1z, uv[0], uv[3],
+        p2x, p2y, p2z, uv[2], uv[3],
+        p3x, p3y, p3z, uv[2], uv[1],
+        p4x, p4y, p4z, uv[0], uv[1],
       );
 
       indexes.push(
@@ -72,20 +56,20 @@ function createMinecraftCharacter() {
     });
   }
 
-  // Coordenadas de textura para skin 64x64
-  const s = 64; // tamanho da textura
+  // Texture coordinates for a 64x64 skin
+  const s = 64; // texture size
 
-  // CABEÇA (8x8x8 pixels)
+  // HEAD (8x8x8 pixels)
   addCube(0, 1.5, 0, 0.5, 0.5, 0.5, {
-    front: [8 / s, 8 / s, 16 / s, 16 / s], // Face frontal
-    back: [24 / s, 8 / s, 32 / s, 16 / s], // Face traseira
-    top: [8 / s, 0 / s, 16 / s, 8 / s], // Topo
-    bottom: [16 / s, 0 / s, 24 / s, 8 / s], // Fundo
-    right: [16 / s, 8 / s, 24 / s, 16 / s], // Direita
-    left: [0 / s, 8 / s, 8 / s, 16 / s], // Esquerda
+    front: [8 / s, 8 / s, 16 / s, 16 / s], // Front face
+    back: [24 / s, 8 / s, 32 / s, 16 / s], // Back face
+    top: [8 / s, 0 / s, 16 / s, 8 / s], // Top
+    bottom: [16 / s, 0 / s, 24 / s, 8 / s], // Bottom
+    right: [16 / s, 8 / s, 24 / s, 16 / s], // Right
+    left: [0 / s, 8 / s, 8 / s, 16 / s], // Left
   });
 
-  // CORPO (8x12x4 pixels)
+  // BODY (8x12x4 pixels)
   addCube(0, 0.75, 0, 0.5, 0.75, 0.25, {
     front: [20 / s, 20 / s, 28 / s, 32 / s],
     back: [32 / s, 20 / s, 40 / s, 32 / s],
@@ -95,7 +79,7 @@ function createMinecraftCharacter() {
     left: [28 / s, 20 / s, 32 / s, 32 / s],
   });
 
-  // BRAÇO DIREITO (4x12x4 pixels)
+  // RIGHT ARM (4x12x4 pixels)
   addCube(0.375, 0.75, 0, 0.25, 0.75, 0.25, {
     front: [44 / s, 20 / s, 48 / s, 32 / s],
     back: [52 / s, 20 / s, 56 / s, 32 / s],
@@ -105,7 +89,7 @@ function createMinecraftCharacter() {
     left: [48 / s, 20 / s, 52 / s, 32 / s],
   });
 
-  // BRAÇO ESQUERDO (4x12x4 pixels)
+  // LEFT ARM (4x12x4 pixels)
   addCube(-0.375, 0.75, 0, 0.25, 0.75, 0.25, {
     front: [36 / s, 52 / s, 40 / s, 64 / s],
     back: [44 / s, 52 / s, 48 / s, 64 / s],
@@ -115,7 +99,7 @@ function createMinecraftCharacter() {
     left: [40 / s, 52 / s, 44 / s, 64 / s],
   });
 
-  // PERNA DIREITA (4x12x4 pixels)
+  // RIGHT LEG (4x12x4 pixels)
   addCube(0.125, 0, 0, 0.25, 0.75, 0.25, {
     front: [4 / s, 20 / s, 8 / s, 32 / s],
     back: [12 / s, 20 / s, 16 / s, 32 / s],
@@ -125,7 +109,7 @@ function createMinecraftCharacter() {
     left: [8 / s, 20 / s, 12 / s, 32 / s],
   });
 
-  // PERNA ESQUERDA (4x12x4 pixels)
+  // LEFT LEG (4x12x4 pixels)
   addCube(-0.125, 0, 0, 0.25, 0.75, 0.25, {
     front: [20 / s, 52 / s, 24 / s, 64 / s],
     back: [28 / s, 52 / s, 32 / s, 64 / s],
