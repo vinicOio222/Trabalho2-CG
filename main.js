@@ -16,6 +16,24 @@ const keys = {};
 // Scene objects
 let sceneObjects = [];
 
+// Mario animation state
+const MARIO_STATE = {
+    INSIDE_PIPE: 0,
+    RISING: 1,
+    JUMPING: 2,
+    FALLING: 3,
+    LANDING: 4,
+    WAITING: 5,
+    ENTERING_PIPE: 6
+};
+
+let marioState = MARIO_STATE.RISING;
+let marioStateTime = 0;           // tempo no estado atual (em frames)
+let marioY = 0;                   // altura do Mario relativa ao cano
+let marioVelocityY = 0;           // velocidade vertical para o pulo
+const MARIO_BASE_Y = 2.5;         // altura do topo do cano
+const PIPE_POSITION = [-3, 0, -2]; // posição do cano
+
 /**
  * Returns the WebGL rendering context from a canvas.
  * @param {HTMLCanvasElement} canvas - The canvas element.
@@ -119,8 +137,137 @@ function createSceneObject(gl, geometry, options = {}) {
   };
 }
 
+function updateMarioAnimation() {
+    marioStateTime++;
+    
+    // Encontra as partes do Mario na cena
+    const head = sceneObjects.find(o => o.name === "marioHead");
+    const body = sceneObjects.find(o => o.name === "marioBody");
+    const rightArm = sceneObjects.find(o => o.name === "marioRightArm");
+    const leftArm = sceneObjects.find(o => o.name === "marioLeftArm");
+    const rightLeg = sceneObjects.find(o => o.name === "marioRightLeg");
+    const leftLeg = sceneObjects.find(o => o.name === "marioLeftLeg");
+    
+    const baseX = PIPE_POSITION[0];
+    const baseZ = PIPE_POSITION[2];
+    
+    switch (marioState) {
+        case MARIO_STATE.INSIDE_PIPE:
+            // Mario escondido dentro do cano
+            marioY = -3;
+            // Reset das rotações
+            rightArm.rotation = [0, 0, 0];
+            leftArm.rotation = [0, 0, 0];
+            rightLeg.rotation = [0, 0, 0];
+            leftLeg.rotation = [0, 0, 0];
+            
+            if (marioStateTime > 120) { // 2 segundos
+                marioState = MARIO_STATE.RISING;
+                marioStateTime = 0;
+            }
+            break;
+            
+        case MARIO_STATE.RISING:
+            // Mario subindo do cano
+            marioY = -2 + (marioStateTime * 0.05);
+            
+            if (marioY >= 0) {
+                marioY = 0;
+                marioState = MARIO_STATE.JUMPING;
+                marioStateTime = 0;
+                marioVelocityY = 0.15; // impulso do pulo
+            }
+            break;
+            
+        case MARIO_STATE.JUMPING:
+            // Mario no ar - pose de pulo
+            marioVelocityY -= 0.005; // gravidade
+            marioY += marioVelocityY;
+            
+            // Pose do pulo: braço direito pra cima, esquerdo pra trás
+            const jumpProgress = Math.min(marioStateTime / 20, 1);
+                  
+            // Rotação positiva = membro vai pra trás, negativa = pra frente
+            rightArm.rotation = [Math.PI * 0.8 * jumpProgress, 0, 0];   // braço pra cima/trás
+            leftArm.rotation = [-Math.PI * 0.3 * jumpProgress, 0, 0];   // braço pra frente
+            rightLeg.rotation = [Math.PI * 0.2 * jumpProgress, 0, 0];   // perna pra trás
+            leftLeg.rotation = [-Math.PI * 0.2 * jumpProgress, 0, 0];   // perna pra frente
+    
+            if (marioVelocityY < 0) {
+                marioState = MARIO_STATE.FALLING;
+                marioStateTime = 0;
+            }
+            break;
+            
+        case MARIO_STATE.FALLING:
+            // Mario caindo
+            marioVelocityY -= 0.005;
+            marioY += marioVelocityY;
+            
+            if (marioY <= 0) {
+                marioY = 0;
+                marioState = MARIO_STATE.LANDING;
+                marioStateTime = 0;
+            }
+            break;
+            
+        case MARIO_STATE.LANDING:
+            // Mario pousando - volta à pose normal
+            const landProgress = marioStateTime / 15;
+            rightArm.rotation = [-Math.PI * 0.8 * (1 - landProgress), 0, 0];
+            leftArm.rotation = [Math.PI * 0.3 * (1 - landProgress), 0, 0];
+            rightLeg.rotation = [-Math.PI * 0.2 * (1 - landProgress), 0, 0];
+            leftLeg.rotation = [Math.PI * 0.2 * (1 - landProgress), 0, 0];
+            
+            if (marioStateTime > 15) {
+                marioState = MARIO_STATE.WAITING;
+                marioStateTime = 0;
+            }
+            break;
+            
+        case MARIO_STATE.WAITING:
+            // Mario esperando antes de entrar no cano
+            rightArm.rotation = [0, 0, 0];
+            leftArm.rotation = [0, 0, 0];
+            rightLeg.rotation = [0, 0, 0];
+            leftLeg.rotation = [0, 0, 0];
+            
+            if (marioStateTime > 180) { // 3 segundos
+                marioState = MARIO_STATE.ENTERING_PIPE;
+                marioStateTime = 0;
+            }
+            break;
+            
+        case MARIO_STATE.ENTERING_PIPE:
+            // Mario entrando no cano
+            marioY = -(marioStateTime * 0.03);
+            
+            if (marioY <= -2) {
+                marioY = -2;
+                marioState = MARIO_STATE.INSIDE_PIPE;
+                marioStateTime = 0;
+            }
+            break;
+    }
+    
+    // Atualiza posições de todas as partes
+    const heightOffset = MARIO_BASE_Y + marioY;
+      
+    head.position = [baseX, heightOffset + 1.5, baseZ];
+    body.position = [baseX, heightOffset + 0.75, baseZ];
+      
+    // Braços: posição no ombro (topo do corpo)
+    rightArm.position = [baseX + 0.375, heightOffset + 0.75 + 0.75, baseZ];  // altura do corpo + altura do corpo
+    leftArm.position = [baseX - 0.375, heightOffset + 0.75 + 0.75, baseZ];
+      
+    // Pernas: posição no quadril (base do corpo)  
+    rightLeg.position = [baseX + 0.125, heightOffset + 0.75, baseZ];  // base do corpo
+    leftLeg.position = [baseX - 0.125, heightOffset + 0.75, baseZ];
+}
+
 function animate(gl, prog) {
   processInput();
+  updateMarioAnimation();
 
   angle += 0.01;
 
@@ -290,6 +437,23 @@ function init() {
   });
   sceneObjects.push(pipe);
 
+  const pipeRimGeom = createRing(0.95, 0.8, 0.25, 20);
+  const pipeRim = createSceneObject(gl, pipeRimGeom, {
+      position: [-3, 2.5, -2],
+      color: [0.2, 0.7, 0.2, 1.0],
+      name: "pipeRim",
+  });
+  sceneObjects.push(pipeRim);
+
+  // Black disk on top of the pipe to simulate hole 
+  const pipeTopGeom = createDisc(0.8, 20);
+  const pipeTop = createSceneObject(gl, pipeTopGeom, {
+      position: [-3, 2.5 + 0.01, -2],  // ligeiramente acima para evitar z-fighting
+      color: [0.0, 0.0, 0.0, 1.0],     // preto
+      name: "pipeTop",
+  });
+  sceneObjects.push(pipeTop);
+
   // 3. Hills with grass texture (hemispheres)
   const hillGeom = createHill(2, 16);
 
@@ -353,17 +517,51 @@ function init() {
     name: "wallWest",
   });
   sceneObjects.push(wallWest);
+    
+  // 5. Mario character parts (for animation)
+  const marioParts = createMinecraftCharacterParts();
 
-  // 5. Minecraft-style Mario character (on top of the pipe)
-  const marioGeom = createMinecraftCharacter();
-  const mario = createSceneObject(gl, marioGeom, {
-    position: [-3, 2.5, -2],
-    scale: [1, 1, 1],
-    texture: marioSkinTexture,
-    name: "mario",
+  const marioHead = createSceneObject(gl, marioParts.head, {
+      position: [-3, 2.5 + 1.5, -2],  // base + altura do corpo + offset
+      texture: marioSkinTexture,
+      name: "marioHead"
   });
-  sceneObjects.push(mario);
-
+  sceneObjects.push(marioHead);
+  
+  const marioBody = createSceneObject(gl, marioParts.body, {
+      position: [-3, 2.5 + 0.75, -2],
+      texture: marioSkinTexture,
+      name: "marioBody"
+  });
+  sceneObjects.push(marioBody);
+  
+  const marioRightArm = createSceneObject(gl, marioParts.rightArm, {
+      position: [-3 + 0.375, 2.5 + 0.75, -2],
+      texture: marioSkinTexture,
+      name: "marioRightArm"
+  });
+  sceneObjects.push(marioRightArm);
+  
+  const marioLeftArm = createSceneObject(gl, marioParts.leftArm, {
+      position: [-3 - 0.375, 2.5 + 0.75, -2],
+      texture: marioSkinTexture,
+      name: "marioLeftArm"
+  });
+  sceneObjects.push(marioLeftArm);
+  
+  const marioRightLeg = createSceneObject(gl, marioParts.rightLeg, {
+      position: [-3 + 0.125, 2.5, -2],
+      texture: marioSkinTexture,
+      name: "marioRightLeg"
+  });
+  sceneObjects.push(marioRightLeg);
+  
+  const marioLeftLeg = createSceneObject(gl, marioParts.leftLeg, {
+      position: [-3 - 0.125, 2.5, -2],
+      texture: marioSkinTexture,
+      name: "marioLeftLeg"
+  });
+  sceneObjects.push(marioLeftLeg);
   // ===== Projection Setup =====
   const uProjection = gl.getUniformLocation(prog, "uProjectionMatrix");
   const projection = perspectiveMatrix(
@@ -390,11 +588,11 @@ function init() {
   document.addEventListener("mousemove", (e) => {
     yaw += e.movementX * mouseSensitivity;
     pitch -= e.movementY * mouseSensitivity;
-
+  
     // Clamp pitch to avoid flipping
     if (pitch > 89) pitch = 89;
     if (pitch < -89) pitch = -89;
-
+  
     updateCameraFront();
   });
 
