@@ -202,3 +202,88 @@ function createSphere(radius, segments) {
     indexes: new Uint16Array(indexes),
   };
 }
+
+/**
+ * Creates a hollow ring/tube (cylinder without caps)
+ * @param {number} outerRadius - Outer radius
+ * @param {number} innerRadius - Inner radius  
+ * @param {number} height - Ring height
+ * @param {number} segments - Number of segments
+ * @returns {Object} Object containing vertices and indices
+ */
+function createRing(outerRadius, innerRadius, height, segments) {
+    const vertices = [];
+    const indexes = [];
+
+    // Outer and inner walls
+    for (let i = 0; i <= segments; i++) {
+        const theta = (i / segments) * Math.PI * 2;
+        const cosT = Math.cos(theta);
+        const sinT = Math.sin(theta);
+
+        // Outer wall - bottom and top
+        vertices.push(cosT * outerRadius, 0, sinT * outerRadius, i / segments, 0);
+        vertices.push(cosT * outerRadius, height, sinT * outerRadius, i / segments, 1);
+        
+        // Inner wall - bottom and top
+        vertices.push(cosT * innerRadius, 0, sinT * innerRadius, i / segments, 0);
+        vertices.push(cosT * innerRadius, height, sinT * innerRadius, i / segments, 1);
+    }
+
+    for (let i = 0; i < segments; i++) {
+        const base = i * 4;
+        
+        // Outer wall faces
+        indexes.push(base, base + 4, base + 1);
+        indexes.push(base + 1, base + 4, base + 5);
+        
+        // Inner wall faces (inverted for correct normals)
+        indexes.push(base + 2, base + 3, base + 6);
+        indexes.push(base + 3, base + 7, base + 6);
+        
+        // Top ring face
+        indexes.push(base + 1, base + 5, base + 3);
+        indexes.push(base + 3, base + 5, base + 7);
+        
+        // Bottom ring face
+        indexes.push(base, base + 2, base + 4);
+        indexes.push(base + 2, base + 6, base + 4);
+    }
+
+    return {
+        vertices: new Float32Array(vertices),
+        indexes: new Uint16Array(indexes)
+    };
+}
+
+/**
+ * Creates a flat disc/circle
+ * @param {number} radius - Disc radius
+ * @param {number} segments - Number of segments
+ * @returns {Object} Object containing vertices and indices
+ */
+function createDisc(radius, segments) {
+    const vertices = [];
+    const indexes = [];
+
+    // Center vertex
+    vertices.push(0, 0, 0, 0.5, 0.5);
+
+    // Edge vertices
+    for (let i = 0; i <= segments; i++) {
+        const theta = (i / segments) * Math.PI * 2;
+        const x = Math.cos(theta) * radius;
+        const z = Math.sin(theta) * radius;
+        vertices.push(x, 0, z, (x / radius + 1) / 2, (z / radius + 1) / 2);
+    }
+
+    // Triangles from center to edge
+    for (let i = 1; i <= segments; i++) {
+        indexes.push(0, i, i + 1);
+    }
+
+    return {
+        vertices: new Float32Array(vertices),
+        indexes: new Uint16Array(indexes)
+    };
+}
