@@ -9,11 +9,11 @@ function createPlane(width, depth) {
   const d = depth / 2;
 
   const vertices = new Float32Array([
-    // posX, posY, posZ, texU, texV
-    -w, 0, -d, 0, 0,
-     w, 0, -d, 1, 0,
-     w, 0,  d, 1, 1,
-    -w, 0,  d, 0, 1,
+    // posX, posY, posZ, texU, texV, normX, normY, normZ
+    -w, 0, -d, 0, 0, 0, 1, 0,
+     w, 0, -d, 1, 0, 0, 1, 0,
+     w, 0,  d, 1, 1, 0, 1, 0,
+    -w, 0,  d, 0, 1, 0, 1, 0,
   ]);
 
   const indexes = new Uint16Array([0, 1, 2, 0, 2, 3]);
@@ -32,11 +32,11 @@ function createWall(width, height) {
   const h = height;
 
   const vertices = new Float32Array([
-    // posX, posY, posZ, texU, texV
-    -w, 0, 0, 0, 1,
-     w, 0, 0, 1, 1,
-     w, h, 0, 1, 0,
-    -w, h, 0, 0, 0,
+    // posX, posY, posZ, texU, texV, normX, normY, normZ
+    -w, 0, 0, 0, 1, 0, 0, 1,
+     w, 0, 0, 1, 1, 0, 0, 1,
+     w, h, 0, 1, 0, 0, 0, 1,
+    -w, h, 0, 0, 0, 0, 0, 1,
   ]);
 
   const indexes = new Uint16Array([0, 1, 2, 0, 2, 3]);
@@ -55,25 +55,29 @@ function createCylinder(radius, height, segments) {
   const vertices = [];
   const indexes = [];
 
-  // Bottom cap (y = 0)
+  // Side vertices
   for (let i = 0; i <= segments; i++) {
     const theta = (i / segments) * Math.PI * 2;
     const x = Math.cos(theta) * radius;
     const z = Math.sin(theta) * radius;
+    
+    // Normal radial (aponta para fora)
+    const nx = Math.cos(theta);
+    const nz = Math.sin(theta);
 
     // Bottom edge vertex
-    vertices.push(x, 0, z, i / segments, 0);
+    vertices.push(x, 0, z, i / segments, 0, nx, 0, nz);
     // Top edge vertex
-    vertices.push(x, height, z, i / segments, 1);
+    vertices.push(x, height, z, i / segments, 1, nx, 0, nz);
   }
 
-  // Bottom cap center
-  const bottomCenterIdx = vertices.length / 5;
-  vertices.push(0, 0, 0, 0.5, 0.5);
+  // Bottom cap center (normal aponta para baixo)
+  const bottomCenterIdx = vertices.length / 8;
+  vertices.push(0, 0, 0, 0.5, 0.5, 0, -1, 0);
 
-  // Top cap center
-  const topCenterIdx = vertices.length / 5;
-  vertices.push(0, height, 0, 0.5, 0.5);
+  // Top cap center (normal aponta para cima)
+  const topCenterIdx = vertices.length / 8;
+  vertices.push(0, height, 0, 0.5, 0.5, 0, 1, 0);
 
   // Side faces
   for (let i = 0; i < segments; i++) {
@@ -135,7 +139,8 @@ function createHill(radius, segments) {
       const u = lon / segments;
       const v = lat / segments;
 
-      vertices.push(radius * x, radius * y, radius * z, u, v);
+      // Normal = direção radial (x, y, z já estão normalizados)
+      vertices.push(radius * x, radius * y, radius * z, u, v, x, y, z);
     }
   }
 
@@ -183,7 +188,7 @@ function createSphere(radius, segments) {
       const u = lon / segments;
       const v = lat / segments;
 
-      vertices.push(radius * x, radius * y, radius * z, u, v);
+      vertices.push(radius * x, radius * y, radius * z, u, v, x, y, z);
     }
   }
 
@@ -221,13 +226,13 @@ function createRing(outerRadius, innerRadius, height, segments) {
         const cosT = Math.cos(theta);
         const sinT = Math.sin(theta);
 
-        // Outer wall - bottom and top
-        vertices.push(cosT * outerRadius, 0, sinT * outerRadius, i / segments, 0);
-        vertices.push(cosT * outerRadius, height, sinT * outerRadius, i / segments, 1);
+        // Outer wall - bottom and top (normal aponta para fora)
+        vertices.push(cosT * outerRadius, 0, sinT * outerRadius, i / segments, 0, cosT, 0, sinT);
+        vertices.push(cosT * outerRadius, height, sinT * outerRadius, i / segments, 1, cosT, 0, sinT);
         
-        // Inner wall - bottom and top
-        vertices.push(cosT * innerRadius, 0, sinT * innerRadius, i / segments, 0);
-        vertices.push(cosT * innerRadius, height, sinT * innerRadius, i / segments, 1);
+        // Inner wall - bottom and top (normal aponta para dentro)
+        vertices.push(cosT * innerRadius, 0, sinT * innerRadius, i / segments, 0, -cosT, 0, -sinT);
+        vertices.push(cosT * innerRadius, height, sinT * innerRadius, i / segments, 1, -cosT, 0, -sinT);
     }
 
     for (let i = 0; i < segments; i++) {
@@ -266,15 +271,15 @@ function createDisc(radius, segments) {
     const vertices = [];
     const indexes = [];
 
-    // Center vertex
-    vertices.push(0, 0, 0, 0.5, 0.5);
+    // Center vertex (normal aponta para cima)
+    vertices.push(0, 0, 0, 0.5, 0.5, 0, 1, 0);
 
-    // Edge vertices
+    // Edge vertices (normal aponta para cima)
     for (let i = 0; i <= segments; i++) {
         const theta = (i / segments) * Math.PI * 2;
         const x = Math.cos(theta) * radius;
         const z = Math.sin(theta) * radius;
-        vertices.push(x, 0, z, (x / radius + 1) / 2, (z / radius + 1) / 2);
+        vertices.push(x, 0, z, (x / radius + 1) / 2, (z / radius + 1) / 2, 0, 1, 0);
     }
 
     // Triangles from center to edge

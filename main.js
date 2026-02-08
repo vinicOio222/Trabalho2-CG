@@ -1,5 +1,5 @@
 let angle = 0;
-const stride = 5 * Float32Array.BYTES_PER_ELEMENT;
+const stride = 8 * Float32Array.BYTES_PER_ELEMENT;
 
 // Camera state
 let cameraPos = [0, 2, 8]; // initial position (higher and farther)
@@ -69,33 +69,70 @@ function createShader(gl, type, source) {
   return shader;
 }
 
-function processInput() {
-  // Forward / Backward (W/S or Arrow keys)
-  if (keys["KeyW"] || keys["ArrowUp"]) {
-    cameraPos[0] += cameraFront[0] * cameraSpeed;
-    cameraPos[1] += cameraFront[1] * cameraSpeed;
-    cameraPos[2] += cameraFront[2] * cameraSpeed;
-  }
-  if (keys["KeyS"] || keys["ArrowDown"]) {
-    cameraPos[0] -= cameraFront[0] * cameraSpeed;
-    cameraPos[1] -= cameraFront[1] * cameraSpeed;
-    cameraPos[2] -= cameraFront[2] * cameraSpeed;
-  }
+/**
+ * Verifica se uma posição colide com o cano
+ * @param {Array} pos - Posição [x, y, z] para verificar
+ * @returns {boolean} true se colidiu
+ */
+function checkPipeCollision(pos) {
+    const pipeX = PIPE_POSITION[0];      // -3
+    const pipeZ = PIPE_POSITION[2];      // -2
+    const pipeRadius = 0.95;             // raio do anel
+    const pipeHeight = 2.65;             // altura do cano + anel
+    const margin = 0.8;                  // margem horizontal
+    const marginY = 0.5;                 // margem vertical
+    
+    // Distância horizontal da câmera ao centro do cano
+    const dx = pos[0] - pipeX;
+    const dz = pos[2] - pipeZ;
+    const distanceXZ = Math.sqrt(dx * dx + dz * dz);
+    
+    // Verifica se está dentro do cilindro horizontalmente
+    const insideRadius = distanceXZ < (pipeRadius + margin);
+    
+    // Verifica se está dentro da altura do cano (Y entre 0 e pipeHeight)
+    const insideHeight = pos[1] < (pipeHeight + marginY) && pos[1] > -marginY;
+    
+    // Colide se está dentro do raio E dentro da altura
+    return insideRadius && insideHeight;
+}
 
-  // Left / Right (A/D or Arrow keys) – strafing
-  if (keys["KeyA"] || keys["ArrowLeft"]) {
-    // Compute right vector = cross(front, up)
-    const right = normalizeVec3(crossVec3(cameraFront, cameraUp));
-    cameraPos[0] -= right[0] * cameraSpeed;
-    cameraPos[1] -= right[1] * cameraSpeed;
-    cameraPos[2] -= right[2] * cameraSpeed;
-  }
-  if (keys["KeyD"] || keys["ArrowRight"]) {
-    const right = normalizeVec3(crossVec3(cameraFront, cameraUp));
-    cameraPos[0] += right[0] * cameraSpeed;
-    cameraPos[1] += right[1] * cameraSpeed;
-    cameraPos[2] += right[2] * cameraSpeed;
-  }
+function processInput() {
+    // Salva posição atual
+    const newPos = [...cameraPos];
+    
+    // Forward / Backward (W/S or Arrow keys)
+    if (keys["KeyW"] || keys["ArrowUp"]) {
+        newPos[0] += cameraFront[0] * cameraSpeed;
+        newPos[1] += cameraFront[1] * cameraSpeed;
+        newPos[2] += cameraFront[2] * cameraSpeed;
+    }
+    if (keys["KeyS"] || keys["ArrowDown"]) {
+        newPos[0] -= cameraFront[0] * cameraSpeed;
+        newPos[1] -= cameraFront[1] * cameraSpeed;
+        newPos[2] -= cameraFront[2] * cameraSpeed;
+    }
+
+    // Left / Right (A/D or Arrow keys) – strafing
+    if (keys["KeyA"] || keys["ArrowLeft"]) {
+        const right = normalizeVec3(crossVec3(cameraFront, cameraUp));
+        newPos[0] -= right[0] * cameraSpeed;
+        newPos[1] -= right[1] * cameraSpeed;
+        newPos[2] -= right[2] * cameraSpeed;
+    }
+    if (keys["KeyD"] || keys["ArrowRight"]) {
+        const right = normalizeVec3(crossVec3(cameraFront, cameraUp));
+        newPos[0] += right[0] * cameraSpeed;
+        newPos[1] += right[1] * cameraSpeed;
+        newPos[2] += right[2] * cameraSpeed;
+    }
+    
+    // Só aplica movimento se não colidiu
+    if (!checkPipeCollision(newPos)) {
+        cameraPos[0] = newPos[0];
+        cameraPos[1] = newPos[1];
+        cameraPos[2] = newPos[2];
+    }
 }
 
 function updateCameraFront() {
@@ -271,6 +308,21 @@ function animate(gl, prog) {
 
   angle += 0.01;
 
+  // Luz girando ao redor da cena
+  const lightRadius = 10;
+  const lightX = Math.cos(angle) * lightRadius;
+  const lightZ = Math.sin(angle) * lightRadius;
+  const lightPos = [lightX, 5, lightZ];
+
+  // Uniforms de iluminação
+  const uLightPos = gl.getUniformLocation(prog, "uLightPos");
+  const uViewPos = gl.getUniformLocation(prog, "uViewPos");
+  const uLightColor = gl.getUniformLocation(prog, "uLightColor");
+
+  gl.uniform3fv(uLightPos, lightPos);
+  gl.uniform3fv(uViewPos, cameraPos);
+  gl.uniform3fv(uLightColor, [1.0, 1.0, 1.0]);
+
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   // Get uniform locations
@@ -328,6 +380,10 @@ function animate(gl, prog) {
     const modelView = multiplyMatrices(view, model);
     gl.uniformMatrix4fv(uModelView, false, modelView);
 
+    // Model matrix (para transformar normais no shader)
+    const uModelMatrix = gl.getUniformLocation(prog, "uModelMatrix");
+    gl.uniformMatrix4fv(uModelMatrix, false, model);
+
     // Configure solid color or texture
     if (obj.color) {
       gl.uniform1i(uUseSolidColor, 1);
@@ -358,6 +414,18 @@ function animate(gl, prog) {
       false,
       stride,
       3 * Float32Array.BYTES_PER_ELEMENT,
+    );
+
+    // Normal attribute
+    const aNormal = gl.getAttribLocation(prog, "aNormal");
+    gl.enableVertexAttribArray(aNormal);
+    gl.vertexAttribPointer(
+      aNormal,
+      3,
+      gl.FLOAT,
+      false,
+      stride,
+      5 * Float32Array.BYTES_PER_ELEMENT
     );
 
     // Draw call

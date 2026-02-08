@@ -24,17 +24,31 @@ function createMinecraftCharacterParts() {
             [x1, y1, z1, x1, y1, z2, x1, y2, z2, x1, y2, z1, texCoords.left],
         ];
 
+        // Normais para cada face (front, back, top, bottom, right, left)
+        const faceNormals = [
+            [0, 0, 1],   // front
+            [0, 0, -1],  // back
+            [0, 1, 0],   // top
+            [0, -1, 0],  // bottom
+            [1, 0, 0],   // right
+            [-1, 0, 0],  // left
+        ];
+
         let offset = 0;
+        let faceIndex = 0;
         faces.forEach((face) => {
             const [p1x, p1y, p1z, p2x, p2y, p2z, p3x, p3y, p3z, p4x, p4y, p4z, uv] = face;
+            const [nx, ny, nz] = faceNormals[faceIndex];
+            
             vertices.push(
-                p1x, p1y, p1z, uv[0], uv[3],
-                p2x, p2y, p2z, uv[2], uv[3],
-                p3x, p3y, p3z, uv[2], uv[1],
-                p4x, p4y, p4z, uv[0], uv[1]
+                p1x, p1y, p1z, uv[0], uv[3], nx, ny, nz,
+                p2x, p2y, p2z, uv[2], uv[3], nx, ny, nz,
+                p3x, p3y, p3z, uv[2], uv[1], nx, ny, nz,
+                p4x, p4y, p4z, uv[0], uv[1], nx, ny, nz
             );
             indexes.push(offset, offset + 1, offset + 2, offset, offset + 2, offset + 3);
             offset += 4;
+            faceIndex++;
         });
 
         return {
