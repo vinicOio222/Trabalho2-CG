@@ -1,6 +1,19 @@
 let angle = 0;
 const stride = 8 * Float32Array.BYTES_PER_ELEMENT;
 
+// =====================================================
+// SISTEMA DE ÁUDIO (AudioManager)
+// =====================================================
+let audioManager = null;  // Será inicializado em init()
+
+// =====================================================
+// MOVIMENTO DO SOL/LUA (NASCER E PÔR DO SOL)
+// =====================================================
+let sunAngle = 0;  // Ângulo atual do sol no arco (0 a 2π)
+const SUN_SPEED = 0.002;  // Velocidade do movimento (ajuste para mais rápido/lento)
+const SUN_RADIUS = 25;    // Raio do arco que o sol percorre
+const SUN_HEIGHT = 15;    // Altura central do arco
+
 // Camera state
 let cameraPos = [0, 2, 8]; // initial position (higher and farther)
 let cameraFront = [0, 0, -1]; // view direction (looking towards -Z)
@@ -17,11 +30,9 @@ const keys = {};
 let sceneObjects = [];
 
 // =====================================================
-// SOL/LUA DE MAJORA'S MASK - POSIÇÃO FIXA DA LUZ
+// SOL/LUA DE MAJORA'S MASK - OBJETO GLOBAL
 // =====================================================
-// A lua está posicionada no céu, visível dentro da cena
-const SUN_POSITION = [0, 50, -35];  // Posição da lua: centro (x=0), alto (y=50), próxima (z=-5)
-let sunObject = null;               // Referência ao objeto da lua
+let sunObject = null;  // Referência ao objeto da lua
 
 // Mario animation state
 const MARIO_STATE = {
@@ -105,6 +116,12 @@ function checkPipeCollision(pos) {
 }
 
 function processInput() {
+  // =====================================================
+  // COLISÃO COM O CHÃO
+  // Altura mínima da câmera (evita atravessar o chão)
+  // =====================================================
+  const FLOOR_HEIGHT = 0.5;  // Altura mínima (0.5 unidades acima do chão Y=0)
+
   // Salva posição atual
   const newPos = [...cameraPos];
 
@@ -134,11 +151,22 @@ function processInput() {
     newPos[2] += right[2] * cameraSpeed;
   }
 
-  // Só aplica movimento se não colidiu
+  // =====================================================
+  // APLICA COLISÕES
+  // =====================================================
+  // 1. Colisão com o chão (não pode ir abaixo da altura mínima)
+  if (newPos[1] < FLOOR_HEIGHT) {
+    newPos[1] = FLOOR_HEIGHT;
+  }
+
+  // 2. Colisão com o cano
   if (!checkPipeCollision(newPos)) {
     cameraPos[0] = newPos[0];
     cameraPos[1] = newPos[1];
     cameraPos[2] = newPos[2];
+  } else {
+    // Se colidiu com o cano, mantém apenas a altura (permite subir/descer)
+    cameraPos[1] = newPos[1];
   }
 }
 
@@ -213,6 +241,9 @@ function updateMarioAnimation() {
 
     case MARIO_STATE.RISING:
       // Mario subindo do cano
+      if (marioStateTime === 1 && audioManager && audioManager.isLoaded('pipe')) {
+        audioManager.playSFX('pipe');
+      }
       marioY = -2 + (marioStateTime * 0.05);
 
       if (marioY >= 0) {
@@ -224,6 +255,11 @@ function updateMarioAnimation() {
       break;
 
     case MARIO_STATE.JUMPING:
+      // Toca som de pulo apenas uma vez (no primeiro frame do estado)
+      if (marioStateTime === 1 && audioManager && audioManager.isLoaded('jump')) {
+        audioManager.playSFX('jump');
+      }
+
       // Mario no ar - pose de pulo
       marioVelocityY -= 0.005; // gravidade
       marioY += marioVelocityY;
@@ -283,6 +319,9 @@ function updateMarioAnimation() {
       break;
 
     case MARIO_STATE.ENTERING_PIPE:
+      if (marioStateTime === 1 && audioManager && audioManager.isLoaded('pipe')) {
+        audioManager.playSFX('pipe');
+      }
       // Mario entrando no cano
       marioY = -(marioStateTime * 0.03);
 
@@ -316,34 +355,30 @@ function animate(gl, prog) {
   angle += 0.01;
 
   // =====================================================
-  // LUA SEMPRE OLHANDO PARA A CÂMERA (BILLBOARD EFFECT)
+  // MOVIMENTO DO SOL/LUA EM ARCO (NASCER E PÔR DO SOL)
   // =====================================================
-  // Faz a lua sempre rotacionar para encarar a câmera
-  // Calcula o vetor da lua para a câmera
-  if (sunObject) {
-    const moonPos = sunObject.position;
-    const dx = cameraPos[0] - moonPos[0];
-    const dz = cameraPos[2] - moonPos[2];
-
-    // Calcula o ângulo de rotação no eixo Y (horizontal)
-    // atan2 retorna o ângulo entre o vetor e o eixo X
-    const angleY = Math.atan2(dx, dz);
-
-    // Calcula o ângulo de rotação no eixo X (vertical)
-    const dy = cameraPos[1] - moonPos[1];
-    const distXZ = Math.sqrt(dx * dx + dz * dz);
-    const angleX = Math.atan2(dy, distXZ);
-
-    // Aplica as rotações para a lua sempre encarar a câmera
-    sunObject.rotation = [-angleX, angleY, 0];
+  // Atualiza o ângulo do sol
+  sunAngle += SUN_SPEED;
+  if (sunAngle > Math.PI * 2) {
+    sunAngle = 0;  // Reinicia o ciclo
   }
 
-  // =====================================================
-  // ILUMINAÇÃO FIXA NA POSIÇÃO DO SOL (LUA DE MAJORA)
-  // =====================================================
-  // A luz agora vem diretamente do sol, não gira mais!
-  // A posição é definida pela constante SUN_POSITION
-  const lightPos = SUN_POSITION;
+  // Calcula a posição do sol em um arco semicircular
+  // O sol se move de leste (-X) para oeste (+X)
+  // A altura varia em um arco, sendo máxima no meio-dia
+  const sunX = 0  // Movimento horizontal (leste → oeste)
+  const sunY = Math.abs(Math.sin(sunAngle)) * SUN_HEIGHT + 5;  // Arco vertical (sempre positivo)
+  const sunZ = -(Math.cos(sunAngle) * SUN_RADIUS);  // Mantém Z fixo no centro
+
+  // Atualiza a posição da lua se ela existir
+  if (sunObject) {
+    sunObject.position = [sunX, sunY, sunZ];
+  }
+
+  // Define a posição da luz (mesma posição do sol)
+  const lightPos = sunObject ? sunObject.position : [0, 20, 0];
+
+
 
   // =====================================================
   // UNIFORMS NECESSÁRIOS PARA ILUMINAÇÃO DE PHONG
@@ -516,7 +551,7 @@ function init() {
   // =====================================================
   // TEXTURA DA LUA DE MAJORA'S MASK (SOL)
   // =====================================================
-  const majoraMoonTexture = loadTexture(gl, "./texture/majora's/image.png");
+  const majoraMoonTexture = loadTexture(gl, "./texture/majora's/moon2.jpeg");
 
   // Texture setup
   const uTexture = gl.getUniformLocation(prog, "uSampler");
@@ -529,19 +564,21 @@ function init() {
   // =====================================================
   // 0. LUA DE MAJORA'S MASK (FONTE DE LUZ)
   // =====================================================
-  // Cria um cubo que sempre rotaciona para encarar a câmera
-  // A textura da lua será aplicada em todas as faces
-  console.log(`[SCENE] Criando cubo da Lua de Majora...`);
+  // Cria um disco que sempre rotaciona para encarar a câmera
+  // A textura da lua será aplicada no disco
+  // A posição inicial será calculada pelo movimento do arco
+  console.log(`[SCENE] Criando disco da Lua de Majora...`);
 
-  const moonCubeGeom = createCube(6);  // Cubo de 6x6x6 unidades
-  sunObject = createSceneObject(gl, moonCubeGeom, {
-    position: SUN_POSITION,         // Posição no céu: [0, 12, -5]
-    scale: [5, 5, 5],               // Escala normal
-    texture: majoraMoonTexture,     // Textura com a face assustadora
-    name: "majoraMoonCube",
+  const moonDiscGeom = createDisc(6, 50);  // Disco de raio 6, 50 segmentos
+  sunObject = createSceneObject(gl, moonDiscGeom, {
+    position: [0, 30, -30],           // Posição inicial (será atualizada pelo movimento)
+    scale: [1.5, 1.5, 1.5],           // Escala normal
+    texture: majoraMoonTexture,       // Textura com a face assustadora
+    name: "majoraMoonDisc",
   });
   sceneObjects.push(sunObject);
-  console.log(`[SCENE] Lua de Majora (cubo) criada na posição [${SUN_POSITION}], emitindo luz para toda a cena`);
+  console.log(`[SCENE] Lua de Majora (disco) criada com movimento de arco (nascer e pôr do sol)`);
+  console.log(`[SCENE] Velocidade: ${SUN_SPEED}, Raio: ${SUN_RADIUS}, Altura: ${SUN_HEIGHT}`);
 
   // 1. Floor with sand texture
   const planeGeom = createPlane(30, 30);
@@ -700,9 +737,46 @@ function init() {
   gl.enable(gl.DEPTH_TEST);
   gl.clearColor(0.5, 0.7, 1.0, 1.0); // light blue sky
 
+  // =====================================================
+  // INICIALIZA SISTEMA DE ÁUDIO
+  // =====================================================
+  console.log("[AUDIO] Inicializando AudioManager...");
+  audioManager = new AudioManager(0.7, 0.8, 1.0);
+  console.log("[AUDIO] AudioManager criado com sucesso!");
+  console.log("[AUDIO] Para adicionar sons:");
+  console.log("  1. Coloque arquivos em ./audio/assets/");
+  console.log("  2. Use: audioManager.loadSound('nome', './audio/assets/arquivo.mp3', 'music|sfx')");
+  console.log("  3. Toque com: audioManager.playMusic('nome') ou audioManager.playSFX('nome')");
+  console.log("[AUDIO] Controles disponíveis:");
+  console.log("  - audioManager.setMasterVolume(0-1)");
+  console.log("  - audioManager.setMusicVolume(0-1)");
+  console.log("  - audioManager.setSFXVolume(0-1)");
+  console.log("  - audioManager.toggleMute()");
+
+  // Carregamento de áudio (assíncrono)
+  audioManager.loadSound('jump', './audio/assets/super-mario-64.mp3', 'sfx');
+  audioManager.loadSound('pipe', './audio/assets/smw_pipe.mp3', 'sfx');
+
+  // Carrega e toca a música de fundo quando estiver pronta
+  audioManager.loadSound('bgMusic', './audio/assets/mm_moon_rumble_stereo.mp3', 'music')
+    .then(() => {
+      audioManager.playMusic('bgMusic', 0.2, true);
+      console.log("[AUDIO] Música de fundo iniciada!");
+    })
+    .catch(error => {
+      console.error("[AUDIO] Erro ao carregar música de fundo:", error);
+    });
+
+
   // ===== Controls =====
   document.addEventListener("keydown", (e) => {
     keys[e.code] = true;
+
+    // Tecla 'M' para mute/unmute
+    if (e.code === "KeyM" && audioManager) {
+      audioManager.toggleMute();
+      console.log(`[AUDIO] Mute ${audioManager.isMuted ? "ON" : "OFF"}`);
+    }
   });
 
   document.addEventListener("keyup", (e) => {
