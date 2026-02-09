@@ -1,4 +1,148 @@
 /**
+ * ===================================================================
+ * CRIAÇÃO DE UM CUBO COM TEXTURA
+ * ===================================================================
+ * Cria um cubo usando 6 quads (um para cada face)
+ * @param {number} size - Tamanho do lado do cubo
+ * @returns {Object} Object containing vertices and indices
+ */
+function createCube(size) {
+  const half = size / 2;
+  const vertices = [];
+  const indexes = [];
+  
+  // Cada face do cubo tem 4 vértices
+  // Formato: posX, posY, posZ, texU, texV, normX, normY, normZ
+  // Coordenadas V invertidas para corrigir textura de cabeça para baixo
+  
+  // Face Frontal (+Z)
+  vertices.push(
+    -half, -half, half, 0, 0, 0, 0, 1,
+     half, -half, half, 1, 0, 0, 0, 1,
+     half,  half, half, 1, 1, 0, 0, 1,
+    -half,  half, half, 0, 1, 0, 0, 1
+  );
+  indexes.push(0, 1, 2, 0, 2, 3);
+  
+  // Face Traseira (-Z)
+  vertices.push(
+     half, -half, -half, 0, 0, 0, 0, -1,
+    -half, -half, -half, 1, 0, 0, 0, -1,
+    -half,  half, -half, 1, 1, 0, 0, -1,
+     half,  half, -half, 0, 1, 0, 0, -1
+  );
+  indexes.push(4, 5, 6, 4, 6, 7);
+  
+  // Face Superior (+Y)
+  vertices.push(
+    -half, half, -half, 0, 0, 0, 1, 0,
+     half, half, -half, 1, 0, 0, 1, 0,
+     half, half,  half, 1, 1, 0, 1, 0,
+    -half, half,  half, 0, 1, 0, 1, 0
+  );
+  indexes.push(8, 9, 10, 8, 10, 11);
+  
+  // Face Inferior (-Y)
+  vertices.push(
+    -half, -half,  half, 0, 0, 0, -1, 0,
+     half, -half,  half, 1, 0, 0, -1, 0,
+     half, -half, -half, 1, 1, 0, -1, 0,
+    -half, -half, -half, 0, 1, 0, -1, 0
+  );
+  indexes.push(12, 13, 14, 12, 14, 15);
+  
+  // Face Direita (+X)
+  vertices.push(
+    half, -half,  half, 0, 0, 1, 0, 0,
+    half, -half, -half, 1, 0, 1, 0, 0,
+    half,  half, -half, 1, 1, 1, 0, 0,
+    half,  half,  half, 0, 1, 1, 0, 0
+  );
+  indexes.push(16, 17, 18, 16, 18, 19);
+  
+  // Face Esquerda (-X)
+  vertices.push(
+    -half, -half, -half, 0, 0, -1, 0, 0,
+    -half, -half,  half, 1, 0, -1, 0, 0,
+    -half,  half,  half, 1, 1, -1, 0, 0,
+    -half,  half, -half, 0, 1, -1, 0, 0
+  );
+  indexes.push(20, 21, 22, 20, 22, 23);
+  
+  return {
+    vertices: new Float32Array(vertices),
+    indexes: new Uint16Array(indexes)
+  };
+}
+
+/**
+ * ===================================================================
+ * CRIAÇÃO DE UM QUAD (QUADRADO) ORIENTADO
+ * ===================================================================
+ * Cria um quadrado simples que pode ser orientado para qualquer direção
+ * @param {number} size - Tamanho do lado do quadrado
+ * @param {string} facing - Direção que o quad está virado: 'front', 'back', 'up', 'down', 'left', 'right'
+ * @returns {Object} Object containing vertices and indices
+ */
+function createQuad(size, facing = 'front') {
+  const half = size / 2;
+  let vertices;
+
+  // Define vértices e normais baseados na direção
+  switch (facing) {
+    case 'front': // Virado para +Z (frente)
+      vertices = new Float32Array([
+        // posX, posY, posZ, texU, texV, normX, normY, normZ
+        -half, -half, 0, 0, 1, 0, 0, 1,  // inferior esquerdo
+         half, -half, 0, 1, 1, 0, 0, 1,  // inferior direito
+         half,  half, 0, 1, 0, 0, 0, 1,  // superior direito
+        -half,  half, 0, 0, 0, 0, 0, 1,  // superior esquerdo
+      ]);
+      break;
+
+    case 'back': // Virado para -Z (trás)
+      vertices = new Float32Array([
+        -half, -half, 0, 1, 1, 0, 0, -1,
+         half, -half, 0, 0, 1, 0, 0, -1,
+         half,  half, 0, 0, 0, 0, 0, -1,
+        -half,  half, 0, 1, 0, 0, 0, -1,
+      ]);
+      break;
+
+    case 'up': // Virado para +Y (cima)
+      vertices = new Float32Array([
+        -half, 0, -half, 0, 1, 0, 1, 0,
+         half, 0, -half, 1, 1, 0, 1, 0,
+         half, 0,  half, 1, 0, 0, 1, 0,
+        -half, 0,  half, 0, 0, 0, 1, 0,
+      ]);
+      break;
+
+    case 'down': // Virado para -Y (baixo)
+      vertices = new Float32Array([
+        -half, 0, -half, 0, 0, 0, -1, 0,
+         half, 0, -half, 1, 0, 0, -1, 0,
+         half, 0,  half, 1, 1, 0, -1, 0,
+        -half, 0,  half, 0, 1, 0, -1, 0,
+      ]);
+      break;
+
+    default:
+      // Default é front
+      vertices = new Float32Array([
+        -half, -half, 0, 0, 1, 0, 0, 1,
+         half, -half, 0, 1, 1, 0, 0, 1,
+         half,  half, 0, 1, 0, 0, 0, 1,
+        -half,  half, 0, 0, 0, 0, 0, 1,
+      ]);
+  }
+
+  const indexes = new Uint16Array([0, 1, 2, 0, 2, 3]);
+
+  return { vertices, indexes };
+}
+
+/**
  * Creates a plane (floor)
  * @param {number} width - Plane width
  * @param {number} depth - Plane depth
