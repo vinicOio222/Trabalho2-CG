@@ -1,39 +1,47 @@
 <!doctype html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <title>WebGL 3D Project</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="stylesheet" href="./style.css" />
-  </head>
 
-  <body onload="init()">
-    <canvas id="glcanvas" width="1000" height="600"></canvas>
+<head>
+  <meta charset="UTF-8" />
+  <title>WebGL 3D Project</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
 
-    <!-- Vertex Shader -->
-    <script id="vertex-shader" type="x-shader/x-vertex">
-      attribute vec3 aPosition;
-      attribute vec2 aTexCoord;
-      attribute vec3 aNormal;
+<body onload="init()">
+  <canvas id="glcanvas" width="1000" height="600"></canvas>
+
+  <!-- Vertex Shader -->
+  <script id="vertex-shader" type="x-shader/x-vertex">
+      attribute vec3 aPosition;  // Posição do vértice
+      attribute vec2 aTexCoord;  // Coordenadas de textura
+      attribute vec3 aNormal;    // Normal do vértice (essencial para Phong)
       
-      uniform mat4 uModelViewMatrix;
-      uniform mat4 uProjectionMatrix;
-      uniform mat4 uModelMatrix;
+      uniform mat4 uModelViewMatrix;   // Matriz Model-View
+      uniform mat4 uProjectionMatrix;  // Matriz de Projeção
+      uniform mat4 uModelMatrix;       // Matriz Model (para transformar normais)
       
-      varying vec2 vTexCoord;
-      varying vec3 vNormal;
-      varying vec3 vFragPos;
+      varying vec2 vTexCoord;   // Passa coordenadas de textura para o fragment shader
+      varying vec3 vNormal;     // Passa normal transformada (necessária para calcular iluminação)
+      varying vec3 vFragPos;    // Passa posição do fragmento no espaço world (necessária para Phong)
       
       void main() {
           vTexCoord = aTexCoord;
+          
+          // Transforma a normal para o espaço world (necessário para iluminação de Phong)
+          // Usa apenas a parte rotacional/escala da matriz model
           vNormal = mat3(uModelMatrix) * aNormal;
+          
+          // Posição do fragmento no espaço world (necessária para calcular direções de luz)
           vFragPos = vec3(uModelMatrix * vec4(aPosition, 1.0));
+          
+          // Posição final do vértice na tela
           gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aPosition, 1.0);
       }
     </script>
 
-    <!-- Fragment Shader -->
-    <script id="fragment-shader" type="x-shader/x-fragment">
+  <!-- Fragment Shader -->
+  <script id="fragment-shader" type="x-shader/x-fragment">
       precision mediump float;
       
       varying vec2 vTexCoord;
@@ -48,7 +56,16 @@
       uniform vec3 uViewPos;
       uniform vec3 uLightColor;
       
+      // =====================================================
+      // PARÂMETROS DO MODELO DE PHONG (Ajustáveis)
+      // =====================================================
+      const float AMBIENT_STRENGTH = 0.3;   // Intensidade da luz ambiental (0.0 a 1.0)
+      const float SPECULAR_STRENGTH = 0.5;  // Intensidade do brilho especular (0.0 a 1.0)
+      const float SHININESS = 32.0;         // Expoente de Phong - controla tamanho do brilho (1 a 256)
+                                            // Valores: 1-10=fosco, 32=plástico, 128=metal, 256=espelho
+      
       void main() {
+          // Obtém a cor base do objeto (textura ou cor sólida)
           vec4 baseColor;
           if (uUseSolidColor) {
               baseColor = uSolidColor;
@@ -56,33 +73,69 @@
               baseColor = texture2D(uSampler, vTexCoord);
           }
           
+          // Normaliza a normal interpolada do vértice
           vec3 norm = normalize(vNormal);
           
-          // Ambient
-          float ambientStrength = 0.3;
-          vec3 ambient = ambientStrength * uLightColor;
+          // =====================================================
+          // MODELO DE ILUMINAÇÃO DE PHONG
+          // =====================================================
           
-          // Diffuse
-          vec3 lightDir = normalize(uLightPos - vFragPos);
-          float diff = max(dot(norm, lightDir), 0.0);
-          vec3 diffuse = diff * uLightColor;
+          // -----------------------------------------------------
+          // 1. REFLEXÃO AMBIENTAL (AMBIENT)
+          // Simula luz ambiente que ilumina uniformemente todos 
+          // os objetos, independente de sua orientação.
+          // Previne que áreas não iluminadas fiquem completamente pretas.
+          // 
+          // Fórmula: I_ambient = k_a × I_light
+          // onde k_a = AMBIENT_STRENGTH
+          // -----------------------------------------------------
+          vec3 ambient = AMBIENT_STRENGTH * uLightColor;
           
-          // Specular
-          float specularStrength = 0.5;
-          vec3 viewDir = normalize(uViewPos - vFragPos);
-          vec3 reflectDir = reflect(-lightDir, norm);
-          float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
-          vec3 specular = specularStrength * spec * uLightColor;
+          // -----------------------------------------------------
+          // 2. REFLEXÃO DIFUSA (DIFFUSE)
+          // Simula reflexão difusa (Lambertiana) onde a luz é
+          // espalhada igualmente em todas as direções.
+          // Depende do ângulo entre a normal da superfície e a
+          // direção da luz (Lei de Lambert: cos θ).
+          // 
+          // Fórmula: I_diffuse = I_light × max(N · L, 0)
+          // onde N = normal, L = direção da luz
+          // -----------------------------------------------------
+          vec3 lightDir = normalize(uLightPos - vFragPos);  // L: Direção da luz
+          float diff = max(dot(norm, lightDir), 0.0);       // N · L = cos(θ)
+          vec3 diffuse = diff * uLightColor;                // Componente difusa
           
+          // -----------------------------------------------------
+          // 3. REFLEXÃO ESPECULAR (SPECULAR)
+          // Simula reflexos brilhantes em superfícies.
+          // Depende do ângulo entre a direção de visualização e
+          // a direção da luz refletida pela superfície.
+          // Usa o expoente de Phong (SHININESS) para controlar
+          // o tamanho do ponto brilhante.
+          // 
+          // Fórmula: I_specular = k_s × I_light × [max(R · V, 0)]^n
+          // onde R = reflexão da luz, V = direção da câmera, n = SHININESS
+          // -----------------------------------------------------
+          vec3 viewDir = normalize(uViewPos - vFragPos);          // V: Direção da câmera
+          vec3 reflectDir = reflect(-lightDir, norm);             // R: Luz refletida pela normal
+          float spec = pow(max(dot(viewDir, reflectDir), 0.0), SHININESS);  // (R · V)^n
+          vec3 specular = SPECULAR_STRENGTH * spec * uLightColor;           // Componente especular
+          
+          // =====================================================
+          // COMBINAÇÃO FINAL DOS TRÊS COMPONENTES DE PHONG
+          // Cor final = (Ambiente + Difusa + Especular) × Cor do objeto
+          // =====================================================
           vec3 result = (ambient + diffuse + specular) * baseColor.rgb;
           gl_FragColor = vec4(result, baseColor.a);
       }
     </script>
 
-    <script src="./math/Matrix.js"></script>
-    <script src="./geometry/Geometry.js"></script>
-    <script src="./geometry/MinecraftCharacter.js"></script>
-    <script src="./texture/Texture.js"></script>
-    <script src="./main.js"></script>
-  </body>
+  <script src="./math/Matrix.js"></script>
+  <script src="./geometry/Geometry.js"></script>
+  <script src="./geometry/MinecraftCharacter.js"></script>
+  <script src="./geometry/OBJLoader.js"></script>
+  <script src="./texture/Texture.js"></script>
+  <script src="./main.js"></script>
+</body>
+
 </html>
