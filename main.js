@@ -23,6 +23,9 @@ let pitch = 0; // vertical rotation (degrees)
 const cameraSpeed = 0.1;
 const mouseSensitivity = 0.1;
 
+// Solaire animation state
+let solaireAnimTime = 0;
+
 // Keyboard state
 const keys = {};
 
@@ -115,6 +118,51 @@ function checkPipeCollision(pos) {
   return insideRadius && insideHeight;
 }
 
+// Dados das colinas: [x, z, raioBase, escala]
+const HILLS = [
+  { x: 5,  z: -5, baseRadius: 2, scale: 1.0 },   // hill1
+  { x: -8, z: -8, baseRadius: 2, scale: 1.5 },   // hill2
+  { x: 8,  z: 5,  baseRadius: 2, scale: 1.2 },   // hill3
+];
+
+/**
+ * Verifica se uma posição colide com alguma colina
+ * @param {Array} pos - Posição [x, y, z] para verificar
+ * @returns {boolean} true se colidiu
+ */
+function checkHillCollision(pos) {
+  const margin = 1.5;  // margem de colisão
+
+  for (const hill of HILLS) {
+    const radius = hill.baseRadius * hill.scale;
+    const height = radius;  // altura da colina = raio (hemisfério)
+
+    // Distância horizontal do centro da colina
+    const dx = pos[0] - hill.x;
+    const dz = pos[2] - hill.z;
+    const distXZ = Math.sqrt(dx * dx + dz * dz);
+
+    // Verifica se está dentro do raio + margem
+    if (distXZ < radius + margin) {
+      // Verifica se está abaixo da superfície da colina
+      // A colina é um hemisfério, então a altura em qualquer ponto é:
+      // h = sqrt(r² - d²) onde d é a distância horizontal
+      if (distXZ <= radius) {
+        const surfaceHeight = Math.sqrt(radius * radius - distXZ * distXZ);
+        if (pos[1] < surfaceHeight + margin) {
+          return true;
+        }
+      } else {
+        // Está na margem externa, verifica altura baixa
+        if (pos[1] < margin) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 function processInput() {
   // =====================================================
   // COLISÃO COM O CHÃO
@@ -159,13 +207,16 @@ function processInput() {
     newPos[1] = FLOOR_HEIGHT;
   }
 
-  // 2. Colisão com o cano
-  if (!checkPipeCollision(newPos)) {
+  // 2. Colisão com o cano e colinas
+  const collidedPipe = checkPipeCollision(newPos);
+  const collidedHill = checkHillCollision(newPos);
+
+  if (!collidedPipe && !collidedHill) {
     cameraPos[0] = newPos[0];
     cameraPos[1] = newPos[1];
     cameraPos[2] = newPos[2];
   } else {
-    // Se colidiu com o cano, mantém apenas a altura (permite subir/descer)
+    // Se colidiu, mantém apenas a altura (permite subir/descer)
     cameraPos[1] = newPos[1];
   }
 }
@@ -348,9 +399,37 @@ function updateMarioAnimation() {
   leftLeg.position = [baseX - 0.125, heightOffset + 0.75, baseZ];
 }
 
+function updateSolaireAnimation() {
+    solaireAnimTime += 0.06;  // velocidade do ciclo
+    
+    const rightArm = sceneObjects.find(o => o.name === "solaireRightArm");
+    const leftArm = sceneObjects.find(o => o.name === "solaireLeftArm");
+    
+    if (!rightArm || !leftArm) return;
+    
+    // sin() varia de -1 a 1
+    // Quando sin = 1: braços totalmente levantados (Praise the Sun)
+    // Quando sin = -1: braços para baixo (posição normal)
+    const cycle = Math.sin(solaireAnimTime);
+    
+    // Interpola entre 0 (normal) e -Math.PI * 0.7 (praise)
+    // (cycle + 1) / 2 converte de [-1,1] para [0,1]
+    const t = (cycle + 1) / 2;  // 0 a 1
+    const armAngle = t * (-Math.PI * 0.7);  // 0 a -126 graus
+    
+    // Braço direito: rotação em X + Z (pra fora)
+    const sideAngleR = t * (-0.3);  // braços abrem quando sobem
+    rightArm.rotation = [armAngle, Math.PI, sideAngleR];
+    
+    // Braço esquerdo: espelhado
+    const sideAngleL = t * 0.3;
+    leftArm.rotation = [armAngle, Math.PI, sideAngleL];
+}
+
 function animate(gl, prog) {
   processInput();
   updateMarioAnimation();
+	updateSolaireAnimation();
 
   angle += 0.01;
 
@@ -536,7 +615,11 @@ function init() {
   // Load textures
   const marioSkinTexture = loadTexture(
     gl,
-    "./texture/assets/3572bed739382c28.png",
+    "./texture/assets/mario.png",
+  );
+  const solaireSkinTexture = loadTexture(
+    gl,
+    "./texture/assets/solaire.png",
   );
   const sandTexture = loadTexture(gl, "./texture/assets/Sand_SM64_Texture.png");
   const grassTexture = loadTexture(
@@ -723,6 +806,62 @@ function init() {
     name: "marioLeftLeg"
   });
   sceneObjects.push(marioLeftLeg);
+
+	// 6. Solaire character (on top of hill1)
+  const solaireParts = createMinecraftCharacterParts();
+  const SOLAIRE_BASE_X = 8;
+  const SOLAIRE_BASE_Y = 2.4;  // topo da colina (raio = 2)
+  const SOLAIRE_BASE_Z = 5;
+	const SOLAIRE_ROTATION_Y = Math.PI;
+
+  const solaireHead = createSceneObject(gl, solaireParts.head, {
+    position: [SOLAIRE_BASE_X, SOLAIRE_BASE_Y + 1.5, SOLAIRE_BASE_Z],
+		rotation: [0, SOLAIRE_ROTATION_Y, 0],
+    texture: solaireSkinTexture,
+    name: "solaireHead"
+  });
+  sceneObjects.push(solaireHead);
+
+  const solaireBody = createSceneObject(gl, solaireParts.body, {
+    position: [SOLAIRE_BASE_X, SOLAIRE_BASE_Y + 0.75, SOLAIRE_BASE_Z],
+		rotation: [0, SOLAIRE_ROTATION_Y, 0],
+    texture: solaireSkinTexture,
+    name: "solaireBody"
+  });
+  sceneObjects.push(solaireBody);
+
+  const solaireRightArm = createSceneObject(gl, solaireParts.rightArm, {
+    position: [SOLAIRE_BASE_X + 0.375, SOLAIRE_BASE_Y + 0.75 + 0.75, SOLAIRE_BASE_Z],
+		rotation: [0, SOLAIRE_ROTATION_Y, 0],
+    texture: solaireSkinTexture,
+    name: "solaireRightArm"
+  });
+  sceneObjects.push(solaireRightArm);
+
+  const solaireLeftArm = createSceneObject(gl, solaireParts.leftArm, {
+    position: [SOLAIRE_BASE_X - 0.375, SOLAIRE_BASE_Y + 0.75 + 0.75, SOLAIRE_BASE_Z],
+		rotation: [0, SOLAIRE_ROTATION_Y, 0],
+    texture: solaireSkinTexture,
+    name: "solaireLeftArm"
+  });
+  sceneObjects.push(solaireLeftArm);
+
+  const solaireRightLeg = createSceneObject(gl, solaireParts.rightLeg, {
+    position: [SOLAIRE_BASE_X + 0.125, SOLAIRE_BASE_Y + 0.75, SOLAIRE_BASE_Z],
+		rotation: [0, SOLAIRE_ROTATION_Y, 0],
+    texture: solaireSkinTexture,
+    name: "solaireRightLeg"
+  });
+  sceneObjects.push(solaireRightLeg);
+
+  const solaireLeftLeg = createSceneObject(gl, solaireParts.leftLeg, {
+    position: [SOLAIRE_BASE_X - 0.125, SOLAIRE_BASE_Y + 0.75, SOLAIRE_BASE_Z],
+		rotation: [0, SOLAIRE_ROTATION_Y, 0],
+    texture: solaireSkinTexture,
+    name: "solaireLeftLeg"
+  });
+  sceneObjects.push(solaireLeftLeg);
+	
   // ===== Projection Setup =====
   const uProjection = gl.getUniformLocation(prog, "uProjectionMatrix");
   const projection = perspectiveMatrix(
